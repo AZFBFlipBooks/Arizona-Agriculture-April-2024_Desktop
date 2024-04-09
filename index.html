@@ -11,8 +11,8 @@
     height: 90vh;
     position: absolute;
 display: flex;
-    width: 30%;
-    max-width: 80%; /* Adjust the maximum width as needed */
+width:30%;
+ max-width: 80%; /* Adjust the maximum width as needed */
 display: flex;
     flex-direction: column;
     align-items: center;
@@ -25,7 +25,7 @@ justify-content: center;
     /* Add necessary styles for the page */
     position: absolute;
     width: 40vh;
-    height: 100vh;
+    height: 90vh;
     backface-visibility: hidden; /* This makes the back of the page invisible when flipped */
     /* More styles as needed for the appearance of the page */
 }
@@ -57,14 +57,14 @@ justify-content: center;
 }
 
 .page {
-
-    width: auto;
-    height: 100vp;
+    transition: transform 1s;
+    transform-style: preserve-3d;
     position: absolute;
-    background-color: white;
-    border: px solid #ccc;
-    backface-visibility: hidden;
     transform-origin: left center;
+}
+
+.flipped {
+    transform: rotateY(-180deg);
 }
 
 
@@ -183,101 +183,93 @@ margin-bottom:-85vh;
     <button id="nextPage">Next</button>
     </html>
 
- 
-   
-    <script>
-        let currentPageIndex = 0;
-        const pages = document.querySelectorAll('.page');
-        const totalPages = pages.length;
-        const flipbook = document.getElementById('flipbook');
-    
-        pages.forEach((page, index) => {
-            page.style.zIndex = totalPages - index;
-        });
-    
-        function flipPage(forward) {
-            if (forward && currentPageIndex < totalPages - 1) {
-                pages[currentPageIndex].style.transform = 'rotateY(-180deg)';
-                currentPageIndex++;
-            } else if (!forward && currentPageIndex > 0) {
-                currentPageIndex--;
-                pages[currentPageIndex].style.transform = '';
-            }
-            updateZIndex();
+<script>
+    const flipbook = document.getElementById('flipbook');
+    const pages = document.querySelectorAll('.page');
+    let currentPageIndex = 0;
+    let zoomFactor = 1, offsetX = 0, offsetY = 0;
+    let startCoords = { x: 0, y: 0 };
+    let isPanning = false, initialDistance = null;
+    const totalPages = pages.length;
+
+    pages.forEach((page, index) => {
+        page.style.zIndex = totalPages - index; // Initial z-index setup
+    });
+
+    const updateZoomAndPan = () => {
+        flipbook.style.transform = `scale(${zoomFactor}) translate(${offsetX}px, ${offsetY}px)`;
+    };
+
+    function flipPage(forward) {
+        if (forward && currentPageIndex < totalPages - 1) {
+            pages[currentPageIndex].classList.add('flipped');
+            currentPageIndex++;
+        } else if (!forward && currentPageIndex > 0) {
+            currentPageIndex--;
+            pages[currentPageIndex].classList.remove('flipped');
         }
-    
-        function updateZIndex() {
-            pages.forEach((page, index) => {
-                page.style.zIndex = index < currentPageIndex ? totalPages - currentPageIndex + index : totalPages - index;
-            });
-        }
-    
-        document.getElementById('nextPage').addEventListener('click', () => flipPage(true));
-        document.getElementById('prevPage').addEventListener('click', () => flipPage(false));
-    
-        const zoomSlider = document.getElementById('zoom-slider');
-        let zoomFactor = 1;
-        let offsetX = 0, offsetY = 0;
-    
-        zoomSlider.addEventListener('input', () => {
-            zoomFactor = parseFloat(zoomSlider.value);
+    }
+
+    document.getElementById('nextPage').addEventListener('click', () => flipPage(true));
+    document.getElementById('prevPage').addEventListener('click', () => flipPage(false));
+
+    document.getElementById('zoom-slider').addEventListener('input', e => {
+        zoomFactor = parseFloat(e.target.value);
+        updateZoomAndPan();
+    });
+
+    const startPan = (x, y) => {
+        isPanning = true;
+        startCoords = { x: x - offsetX, y: y - offsetY };
+        document.body.style.userSelect = 'none';
+    };
+
+    const doPan = (x, y) => {
+        if (!isPanning) return;
+        requestAnimationFrame(() => {
+            offsetX = x - startCoords.x;
+            offsetY = y - startCoords.y;
             updateZoomAndPan();
         });
-    
-        function updateZoomAndPan() {
-            flipbook.style.transform = `scale(${zoomFactor}) translate(${offsetX}px, ${offsetY}px)`;
-        }
-    
-        let isPanning = false;
-        let startCoords = { x: 0, y: 0 };
-    
-        const startPan = (x, y) => {
-            isPanning = true;
-            startCoords = { x: x - offsetX, y: y - offsetY };
-            // Prevent default behavior to avoid text selection, etc.
-            document.body.style.userSelect = 'none';
-        };
-    
-        const doPan = (x, y) => {
-            if (!isPanning) return;
-            requestAnimationFrame(() => {
-                offsetX = x - startCoords.x;
-                offsetY = y - startCoords.y;
-                updateZoomAndPan();
-            });
-        };
-    
-        const endPan = () => {
-            isPanning = false;
-            document.body.style.userSelect = '';
-        };
-    
-        flipbook.addEventListener('mousedown', e => {
-            e.preventDefault(); // Prevent default to avoid drag and drop behavior
-            startPan(e.clientX, e.clientY);
-        });
-    
-        window.addEventListener('mousemove', e => {
-            doPan(e.clientX, e.clientY);
-        });
-    
-        window.addEventListener('mouseup', endPan);
-    
-        // Touch Events for Panning
-        flipbook.addEventListener('touchstart', e => {
-            e.preventDefault(); // Might be needed to prevent scrolling or swiping
+    };
+
+    const endPan = () => {
+        isPanning = false;
+        initialDistance = null;
+        document.body.style.userSelect = '';
+    };
+
+    const getDistance = (touch1, touch2) => {
+        const dx = touch1.clientX - touch2.clientX;
+        const dy = touch1.clientY - touch2.clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    flipbook.addEventListener('touchstart', e => {
+        e.preventDefault();
+        if (e.touches.length === 1) {
             const touch = e.touches[0];
             startPan(touch.clientX, touch.clientY);
-        });
-    
-        flipbook.addEventListener('touchmove', e => {
+        } else if (e.touches.length === 2) {
+            initialDistance = getDistance(e.touches[0], e.touches[1]);
+        }
+    });
+
+    flipbook.addEventListener('touchmove', e => {
+        if (e.touches.length === 1 && !initialDistance) {
             const touch = e.touches[0];
             doPan(touch.clientX, touch.clientY);
-        });
-    
-        flipbook.addEventListener('touchend', endPan);
-    </script>
-</body>
-</html>
-</body>
-</html>
+        } else if (e.touches.length === 2) {
+            const distance = getDistance(e.touches[0], e.touches[1]);
+            if (initialDistance) {
+                let newZoomFactor = zoomFactor * (distance / initialDistance);
+                newZoomFactor = Math.max(Math.min(newZoomFactor, 5), 1); // Restrict zoomFactor between 1 and 5
+                zoomFactor = newZoomFactor;
+                initialDistance = distance;
+                updateZoomAndPan();
+            }
+        }
+    });
+
+    flipbook.addEventListener('touchend', endPan);
+</script>
